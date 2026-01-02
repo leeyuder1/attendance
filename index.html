@@ -691,6 +691,9 @@
             }
         }
     </style>
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 </head>
 <body>
     <div class="container">
@@ -864,14 +867,45 @@
     </div>
 
     <script>
+        // ========== Firebase 設定區 ==========
+        // 請將以下設定替換為您的 Firebase 設定
+        // 詳細說明請參考 FIREBASE_SETUP.md
+        let USE_FIREBASE = true; // 設為 true 啟用 Firebase，false 則使用 localStorage
+        
+        let db = null;
+        if (USE_FIREBASE) {
+            const firebaseConfig = {
+                // TODO: 請替換為您的 Firebase 設定
+                apiKey: "AIzaSyBfgQhkccwSBqPcfOYp8QUR7RuvG9unKIc",
+                authDomain: "attendancesystem-yuderlee.firebaseapp.com",
+                projectId: "attendancesystem-yuderlee",
+                storageBucket: "attendancesystem-yuderlee.firebasestorage.app",
+                messagingSenderId: "894483934672",
+                appId: "1:894483934672:web:8b682215c90545e87f5dd5",
+                measurementId: "G-NPEVXTF5V9"
+
+            };
+            
+            try {
+                firebase.initializeApp(firebaseConfig);
+                db = firebase.firestore();
+                console.log('Firebase 初始化成功');
+            } catch (error) {
+                console.error('Firebase 初始化失敗:', error);
+                USE_FIREBASE = false;
+            }
+        }
+        // ========== Firebase 設定區結束 ==========
+
         // 初始化：設定今天為預設日期
         document.getElementById('selectedDate').valueAsDate = new Date();
         document.getElementById('searchDate').valueAsDate = new Date();
 
-        // 從 localStorage 載入數據
-        let students = JSON.parse(localStorage.getItem('students')) || [];
-        let attendance = JSON.parse(localStorage.getItem('attendance')) || {};
-        let seatLayout = JSON.parse(localStorage.getItem('seatLayout')) || { rows: 6, cols: 6, seats: {} };
+        // 從 localStorage 或 Firebase 載入數據
+        let students = [];
+        let attendance = {};
+        let seatLayout = { rows: 6, cols: 6, seats: {} };
+        let dataLoaded = false;
         let draggingStudent = null;
         let currentLeaveStudent = null;
         let selectedLeaveType = null;
@@ -1660,19 +1694,159 @@
         }
 
         // 儲存學生列表
-        function saveStudents() {
+        async function saveStudents() {
+            // 同時儲存到 localStorage（作為備份）
             localStorage.setItem('students', JSON.stringify(students));
+            
+            // 如果使用 Firebase，也儲存到雲端
+            if (USE_FIREBASE && db) {
+                try {
+                    await db.collection('data').doc('students').set({ data: students });
+                } catch (error) {
+                    console.error('儲存學生資料到 Firebase 失敗:', error);
+                }
+            }
         }
 
         // 儲存出勤記錄
-        function saveAttendance() {
+        async function saveAttendance() {
+            // 同時儲存到 localStorage（作為備份）
             localStorage.setItem('attendance', JSON.stringify(attendance));
+            
+            // 如果使用 Firebase，也儲存到雲端
+            if (USE_FIREBASE && db) {
+                try {
+                    await db.collection('data').doc('attendance').set({ data: attendance });
+                } catch (error) {
+                    console.error('儲存出勤記錄到 Firebase 失敗:', error);
+                }
+            }
         }
 
         // 儲存座位配置
-        function saveSeatLayout() {
+        async function saveSeatLayout() {
+            // 同時儲存到 localStorage（作為備份）
             localStorage.setItem('seatLayout', JSON.stringify(seatLayout));
+            
+            // 如果使用 Firebase，也儲存到雲端
+            if (USE_FIREBASE && db) {
+                try {
+                    await db.collection('data').doc('seatLayout').set({ data: seatLayout });
+                } catch (error) {
+                    console.error('儲存座位配置到 Firebase 失敗:', error);
+                }
+            }
         }
+
+        // 從 Firebase 載入資料
+        async function loadDataFromFirebase() {
+            if (!USE_FIREBASE || !db) {
+                // 如果不使用 Firebase，從 localStorage 載入
+                students = JSON.parse(localStorage.getItem('students')) || [];
+                attendance = JSON.parse(localStorage.getItem('attendance')) || {};
+                seatLayout = JSON.parse(localStorage.getItem('seatLayout')) || { rows: 6, cols: 6, seats: {} };
+                dataLoaded = true;
+                renderSeats();
+                updateStats();
+                return;
+            }
+
+            try {
+                // 從 Firebase 載入資料
+                const studentsDoc = await db.collection('data').doc('students').get();
+                const attendanceDoc = await db.collection('data').doc('attendance').get();
+                const seatLayoutDoc = await db.collection('data').doc('seatLayout').get();
+
+                if (studentsDoc.exists) {
+                    students = studentsDoc.data().data || [];
+                    // 同步到 localStorage
+                    localStorage.setItem('students', JSON.stringify(students));
+                } else {
+                    // 如果 Firebase 沒有資料，嘗試從 localStorage 載入並上傳
+                    students = JSON.parse(localStorage.getItem('students')) || [];
+                    if (students.length > 0) {
+                        await saveStudents();
+                    }
+                }
+
+                if (attendanceDoc.exists) {
+                    attendance = attendanceDoc.data().data || {};
+                    // 同步到 localStorage
+                    localStorage.setItem('attendance', JSON.stringify(attendance));
+                } else {
+                    attendance = JSON.parse(localStorage.getItem('attendance')) || {};
+                    if (Object.keys(attendance).length > 0) {
+                        await saveAttendance();
+                    }
+                }
+
+                if (seatLayoutDoc.exists) {
+                    seatLayout = seatLayoutDoc.data().data || { rows: 6, cols: 6, seats: {} };
+                    // 同步到 localStorage
+                    localStorage.setItem('seatLayout', JSON.stringify(seatLayout));
+                } else {
+                    seatLayout = JSON.parse(localStorage.getItem('seatLayout')) || { rows: 6, cols: 6, seats: {} };
+                    if (seatLayout.rows && seatLayout.cols) {
+                        await saveSeatLayout();
+                    }
+                }
+
+                dataLoaded = true;
+                renderSeats();
+                updateStats();
+                
+                // 監聽資料變更（即時同步）
+                db.collection('data').doc('students').onSnapshot((doc) => {
+                    if (doc.exists && dataLoaded) {
+                        const newStudents = doc.data().data || [];
+                        if (JSON.stringify(newStudents) !== JSON.stringify(students)) {
+                            students = newStudents;
+                            localStorage.setItem('students', JSON.stringify(students));
+                            renderSeats();
+                            updateStats();
+                        }
+                    }
+                });
+
+                db.collection('data').doc('attendance').onSnapshot((doc) => {
+                    if (doc.exists && dataLoaded) {
+                        const newAttendance = doc.data().data || {};
+                        if (JSON.stringify(newAttendance) !== JSON.stringify(attendance)) {
+                            attendance = newAttendance;
+                            localStorage.setItem('attendance', JSON.stringify(attendance));
+                            renderSeats();
+                            updateStats();
+                        }
+                    }
+                });
+
+                db.collection('data').doc('seatLayout').onSnapshot((doc) => {
+                    if (doc.exists && dataLoaded) {
+                        const newSeatLayout = doc.data().data || { rows: 6, cols: 6, seats: {} };
+                        if (JSON.stringify(newSeatLayout) !== JSON.stringify(seatLayout)) {
+                            seatLayout = newSeatLayout;
+                            localStorage.setItem('seatLayout', JSON.stringify(seatLayout));
+                            renderSeats();
+                            updateStats();
+                        }
+                    }
+                });
+
+                console.log('資料載入成功');
+            } catch (error) {
+                console.error('從 Firebase 載入資料失敗:', error);
+                // 發生錯誤時，使用 localStorage 作為備份
+                students = JSON.parse(localStorage.getItem('students')) || [];
+                attendance = JSON.parse(localStorage.getItem('attendance')) || {};
+                seatLayout = JSON.parse(localStorage.getItem('seatLayout')) || { rows: 6, cols: 6, seats: {} };
+                dataLoaded = true;
+                renderSeats();
+                updateStats();
+            }
+        }
+
+        // 初始化時載入資料
+        loadDataFromFirebase();
 
         // 格式化日期
         function formatDate(dateString) {
@@ -1897,16 +2071,24 @@
             saveAttendance();
         }
 
-        // 清理無效記錄
-        cleanInvalidRecords();
-
-        // 初始化渲染
-        if (seatLayout.rows && seatLayout.cols) {
-            document.getElementById('rows').value = seatLayout.rows;
-            document.getElementById('cols').value = seatLayout.cols;
+        // 清理無效記錄（等待資料載入完成後執行）
+        function initializeApp() {
+            cleanInvalidRecords();
+            // 初始化渲染
+            if (seatLayout.rows && seatLayout.cols) {
+                document.getElementById('rows').value = seatLayout.rows;
+                document.getElementById('cols').value = seatLayout.cols;
+            }
+            // renderSeats() 和 updateStats() 會在 loadDataFromFirebase() 中呼叫
         }
-        renderSeats();
-        updateStats();
+        
+        // 等待資料載入完成
+        const checkDataLoaded = setInterval(() => {
+            if (dataLoaded) {
+                clearInterval(checkDataLoaded);
+                initializeApp();
+            }
+        }, 100);
     </script>
 </body>
 </html>
