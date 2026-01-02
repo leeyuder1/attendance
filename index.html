@@ -260,7 +260,49 @@
             padding: 30px;
             border-radius: 12px;
             margin-top: 20px;
-            overflow-x: auto;
+            overflow: auto;
+            position: relative;
+            transform-origin: top center;
+            transition: transform 0.3s ease;
+        }
+
+        .zoom-controls {
+            position: sticky;
+            top: 10px;
+            right: 10px;
+            background: white;
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            z-index: 100;
+            margin-bottom: 10px;
+        }
+
+        .zoom-controls label {
+            font-weight: bold;
+            color: #333;
+            white-space: nowrap;
+        }
+
+        .zoom-slider {
+            width: 150px;
+            cursor: pointer;
+        }
+
+        .zoom-value {
+            min-width: 50px;
+            text-align: center;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .zoom-btn {
+            padding: 5px 12px;
+            font-size: 14px;
+            min-width: auto;
         }
 
         .seat-grid {
@@ -768,7 +810,14 @@
             <!-- 座位配置 -->
             <div class="seat-config" id="seatConfig" style="display: none;">
                 <h3>🪑 座位配置</h3>
-                <div class="seat-grid-container">
+                <div class="zoom-controls">
+                    <label>縮放：</label>
+                    <input type="range" id="zoomSlider" class="zoom-slider" min="30" max="150" value="100" step="5">
+                    <span class="zoom-value" id="zoomValue">100%</span>
+                    <button class="zoom-btn" onclick="resetZoom()">重置</button>
+                    <button class="zoom-btn" onclick="fitToScreen()">適應螢幕</button>
+                </div>
+                <div class="seat-grid-container" id="seatGridContainer">
                     <div class="seat-grid" id="seatGrid"></div>
                 </div>
             </div>
@@ -2089,6 +2138,99 @@
                 initializeApp();
             }
         }, 100);
+
+        // ========== 縮放功能 ==========
+        let currentZoom = 100;
+        
+        // 初始化縮放控制（等待 DOM 載入完成）
+        function initZoomControls() {
+            const zoomSlider = document.getElementById('zoomSlider');
+            const zoomValue = document.getElementById('zoomValue');
+            const seatGridContainer = document.getElementById('seatGridContainer');
+
+            if (!zoomSlider || !zoomValue || !seatGridContainer) {
+                // 如果元素還不存在，稍後再試
+                setTimeout(initZoomControls, 100);
+                return;
+            }
+
+            // 從 localStorage 載入上次的縮放設定
+            const savedZoom = localStorage.getItem('seatZoom');
+            if (savedZoom) {
+                currentZoom = parseInt(savedZoom);
+                zoomSlider.value = currentZoom;
+                zoomValue.textContent = currentZoom + '%';
+                seatGridContainer.style.transform = `scale(${currentZoom / 100})`;
+            }
+
+            // 監聽縮放滑桿變化
+            zoomSlider.addEventListener('input', function(e) {
+                currentZoom = parseInt(e.target.value);
+                zoomValue.textContent = currentZoom + '%';
+                seatGridContainer.style.transform = `scale(${currentZoom / 100})`;
+                // 儲存縮放設定
+                localStorage.setItem('seatZoom', currentZoom);
+            });
+        }
+
+        // 重置縮放
+        function resetZoom() {
+            const zoomSlider = document.getElementById('zoomSlider');
+            const zoomValue = document.getElementById('zoomValue');
+            const seatGridContainer = document.getElementById('seatGridContainer');
+            
+            if (zoomSlider && zoomValue && seatGridContainer) {
+                currentZoom = 100;
+                zoomSlider.value = currentZoom;
+                zoomValue.textContent = currentZoom + '%';
+                seatGridContainer.style.transform = `scale(1)`;
+                localStorage.setItem('seatZoom', currentZoom);
+            }
+        }
+
+        // 適應螢幕（自動計算適合的縮放比例）
+        function fitToScreen() {
+            const seatGridContainer = document.getElementById('seatGridContainer');
+            const grid = document.getElementById('seatGrid');
+            const zoomSlider = document.getElementById('zoomSlider');
+            const zoomValue = document.getElementById('zoomValue');
+            
+            if (!seatGridContainer || !grid || !seatLayout.rows || !seatLayout.cols) return;
+
+            // 計算座位表的實際大小
+            const seatWidth = 120; // 每個座位的寬度
+            const seatHeight = 100; // 每個座位的高度
+            const gap = 10; // 間距
+            const padding = 40; // 內邊距
+            
+            const gridWidth = (seatWidth + gap) * seatLayout.cols - gap + padding;
+            const gridHeight = (seatHeight + gap) * seatLayout.rows - gap + padding;
+            
+            // 取得視窗大小（減去一些邊距）
+            const viewportWidth = window.innerWidth - 100;
+            const viewportHeight = window.innerHeight - 300;
+            
+            // 計算適合的縮放比例
+            const scaleX = viewportWidth / gridWidth;
+            const scaleY = viewportHeight / gridHeight;
+            const optimalScale = Math.min(scaleX, scaleY, 1) * 100; // 不超過 100%
+            
+            // 設定縮放（最小 30%，最大 100%）
+            currentZoom = Math.max(30, Math.min(100, Math.floor(optimalScale / 5) * 5));
+            
+            if (zoomSlider && zoomValue) {
+                zoomSlider.value = currentZoom;
+                zoomValue.textContent = currentZoom + '%';
+            }
+            seatGridContainer.style.transform = `scale(${currentZoom / 100})`;
+            localStorage.setItem('seatZoom', currentZoom);
+        }
+
+        // 頁面載入完成後初始化縮放控制
+        window.addEventListener('DOMContentLoaded', function() {
+            setTimeout(initZoomControls, 500);
+        });
+        // ========== 縮放功能結束 ==========
     </script>
 </body>
 </html>
