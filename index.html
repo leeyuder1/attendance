@@ -1003,8 +1003,15 @@ let previousSeatSnapshot = null; // 換座位前的備份
         // ========== Firebase 設定區結束 ==========
 
         // 初始化：設定今天為預設日期
-        document.getElementById('selectedDate').valueAsDate = new Date();
-        document.getElementById('searchDate').valueAsDate = new Date();
+        const today = new Date();
+        document.getElementById('selectedDate').valueAsDate = today;
+        document.getElementById('searchDate').valueAsDate = today;
+
+        // 確保一載入就以今日日期刷新畫面
+        setTimeout(() => {
+            renderSeats();
+            updateStats();
+        }, 0);
 
         // 從 localStorage 或 Firebase 載入數據
         let students = [];
@@ -2093,11 +2100,11 @@ let previousSeatSnapshot = null; // 換座位前的備份
             }
         }
 
-        // 初始化時載入資料
-        loadDataFromFirebase();
-        
-        // 載入學生格數資料
+        // ⚠️ 每次重新整理先抓最新格數（不使用快取）
         loadStudentPoints();
+
+        // 再載入學生與點名資料
+        loadDataFromFirebase();
         
         // 每5分鐘自動重新載入格數資料
         setInterval(loadStudentPoints, 5 * 60 * 1000);
