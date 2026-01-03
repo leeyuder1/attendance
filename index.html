@@ -753,6 +753,26 @@
             renderSeats();
         }
 
+
+function getTaiwanTime() {
+    const now = new Date();
+    return new Date(now.toLocaleString("en-US", { timeZone: "Asia/Taipei" }));
+}
+
+window.addEventListener("load", function () {
+    const t = getTaiwanTime();
+    const yyyy = t.getFullYear();
+    const mm = String(t.getMonth() + 1).padStart(2, '0');
+    const dd = String(t.getDate()).padStart(2, '0');
+    const hh = String(t.getHours()).padStart(2, '0');
+    const min = String(t.getMinutes()).padStart(2, '0');
+
+    const timeInput = document.getElementById("currentTime");
+    if (timeInput) {
+        timeInput.value = `${yyyy}-${mm}-${dd}T${hh}:${min}`;
+    }
+});
+
 </script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js">
         function undoShuffle() {
@@ -827,8 +847,7 @@
                     <input type="number" id="cols" placeholder="列" min="1" max="20" value="6">
                 </div>
                 <button onclick="setupSeats()">🪑 設定座位</button>
-                <button onclick="shuffleSeats()" class="btn-danger" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">🔀 打亂座位</button>
-            </div>
+                </div>
 
             <!-- 統計資訊 -->
             <div class="stats" id="stats">
