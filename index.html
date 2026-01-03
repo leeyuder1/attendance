@@ -734,8 +734,46 @@
         }
     </style>
     <!-- Firebase SDK -->
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js">
+        function undoShuffle() {
+            if (!previousSeatSnapshot) {
+                alert('目前沒有可以復原的座位變更');
+                return;
+            }
+
+            previousSeatSnapshot.forEach(prev => {
+                const student = students.find(s => s.name === prev.name);
+                if (student) {
+                    student.row = prev.row;
+                    student.col = prev.col;
+                }
+            });
+
+            saveStudents();
+            renderSeats();
+        }
+
+</script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js">
+        function undoShuffle() {
+            if (!previousSeatSnapshot) {
+                alert('目前沒有可以復原的座位變更');
+                return;
+            }
+
+            previousSeatSnapshot.forEach(prev => {
+                const student = students.find(s => s.name === prev.name);
+                if (student) {
+                    student.row = prev.row;
+                    student.col = prev.col;
+                }
+            });
+
+            saveStudents();
+            renderSeats();
+        }
+
+</script>
 </head>
 <body>
     <div class="container">
@@ -812,7 +850,7 @@
             <div class="seat-config" id="seatConfig" style="display: none;">
                 <h3>🪑 座位配置</h3>
                 <div id="topStudentsDisplay" style="margin-bottom: 15px; padding: 15px; background: #fff3cd; border-radius: 8px; border: 2px solid #ffc107; display: none;">
-                    <strong style="color: #856404;">⚠️ 點數最多前12名：</strong>
+                    <strong style="color: #856404;">⚠️ 格數最多前12名：</strong>
                     <span id="topStudentsList" style="color: #856404; margin-left: 10px;"></span>
                 </div>
                 <div class="zoom-controls">
@@ -821,6 +859,8 @@
                     <span class="zoom-value" id="zoomValue">100%</span>
                     <button class="zoom-btn" onclick="resetZoom()">重置</button>
                     <button class="zoom-btn" onclick="fitToScreen()">適應螢幕</button>
+                    <button class="zoom-btn btn-danger" onclick="shuffleSeats()">🔀 換座位</button>
+                    <button class="zoom-btn" onclick="undoShuffle()">↩️ 復原</button>
                 </div>
                 <div class="seat-grid-container" id="seatGridContainer">
                     <div class="seat-grid" id="seatGrid"></div>
@@ -922,11 +962,12 @@
 
     <script>
 
-/* ===== Google Sheets 點數設定（修正新增） ===== */
+/* ===== Google Sheets 格數設定（修正新增） ===== */
 const GOOGLE_SHEETS_URL =
   'https://docs.google.com/spreadsheets/d/15YcjLSBNfVfXksPPXoCmIWFyYo3fk7aMGkp9GugoJQA/export?format=csv';
 
-let studentPoints = {}; // 座號 -> 累計點數
+let studentPoints = {}; // 座號 -> 累計格數
+let previousSeatSnapshot = null; // 換座位前的備份
 
         // ========== Firebase 設定區 ==========
         // 請將以下設定替換為您的 Firebase 設定
@@ -1066,6 +1107,8 @@ let studentPoints = {}; // 座號 -> 累計點數
 
         // 打亂座位
         function shuffleSeats() {
+            // 備份目前座位狀態
+            previousSeatSnapshot = students.map(s => ({ name: s.name, row: s.row, col: s.col }));
             if (!seatLayout.rows || !seatLayout.cols) {
                 alert('請先設定座位配置！');
                 return;
@@ -1132,7 +1175,7 @@ let studentPoints = {}; // 座號 -> 累計點數
             return result;
         }
 
-        // 從 Google Sheets 讀取點數資料
+        // 從 Google Sheets 讀取格數資料
         async function loadStudentPoints() {
             try {
                 const response = await fetch(GOOGLE_SHEETS_URL + '&t=' + Date.now()); // 添加時間戳避免快取
@@ -1151,7 +1194,7 @@ let studentPoints = {}; // 座號 -> 累計點數
                     
                     const columns = parseCSVLine(line);
                     if (columns.length > 0) {
-                        // 第一欄（A欄）是總點數
+                        // 第一欄（A欄）是總格數
                         const totalPoints = parseFloat(columns[0]) || 0;
                         const studentNumber = index + 1; // 第1行是1號，第2行是2號...
                         if (!isNaN(totalPoints)) {
@@ -1160,7 +1203,7 @@ let studentPoints = {}; // 座號 -> 累計點數
                     }
                 });
                 
-                console.log('學生點數資料載入成功', studentPoints);
+                console.log('學生格數資料載入成功', studentPoints);
                 
                 // 更新座位顯示和排行榜
                 if (dataLoaded) {
@@ -1168,12 +1211,12 @@ let studentPoints = {}; // 座號 -> 累計點數
                     updateTopStudents();
                 }
             } catch (error) {
-                console.error('載入學生點數失敗:', error);
+                console.error('載入學生格數失敗:', error);
                 // 如果載入失敗，不影響其他功能
             }
         }
 
-        // 更新前12名點數最多的學生
+        // 更新前12名格數最多的學生
         function updateTopStudents() {
             const topStudentsDisplay = document.getElementById('topStudentsDisplay');
             const topStudentsList = document.getElementById('topStudentsList');
@@ -1183,13 +1226,13 @@ let studentPoints = {}; // 座號 -> 累計點數
                 return;
             }
 
-            // 將點數資料轉換為陣列並排序
+            // 將格數資料轉換為陣列並排序
             const pointsArray = Object.entries(studentPoints)
                 .map(([number, points]) => ({
                     number: parseInt(number),
                     points: points
                 }))
-                .filter(item => item.points > 0) // 只顯示點數大於0的
+                .filter(item => item.points > 0) // 只顯示格數大於0的
                 .sort((a, b) => b.points - a.points) // 由高到低排序
                 .slice(0, 12); // 取前12名
 
@@ -2054,10 +2097,10 @@ let studentPoints = {}; // 座號 -> 累計點數
         // 初始化時載入資料
         loadDataFromFirebase();
         
-        // 載入學生點數資料
+        // 載入學生格數資料
         loadStudentPoints();
         
-        // 每5分鐘自動重新載入點數資料
+        // 每5分鐘自動重新載入格數資料
         setInterval(loadStudentPoints, 5 * 60 * 1000);
 
         // 格式化日期
@@ -2394,6 +2437,25 @@ let studentPoints = {}; // 座號 -> 累計點數
             setTimeout(initZoomControls, 500);
         });
         // ========== 縮放功能結束 ==========
-    </script>
+    
+        function undoShuffle() {
+            if (!previousSeatSnapshot) {
+                alert('目前沒有可以復原的座位變更');
+                return;
+            }
+
+            previousSeatSnapshot.forEach(prev => {
+                const student = students.find(s => s.name === prev.name);
+                if (student) {
+                    student.row = prev.row;
+                    student.col = prev.col;
+                }
+            });
+
+            saveStudents();
+            renderSeats();
+        }
+
+</script>
 </body>
 </html>
