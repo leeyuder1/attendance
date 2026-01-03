@@ -859,8 +859,11 @@
                     <span class="zoom-value" id="zoomValue">100%</span>
                     <button class="zoom-btn" onclick="resetZoom()">重置</button>
                     <button class="zoom-btn" onclick="fitToScreen()">適應螢幕</button>
-                    <button class="zoom-btn btn-danger" onclick="shuffleSeats()">🔀 換座位</button>
-                    <button class="zoom-btn" onclick="undoShuffle()">↩️ 復原</button>
+
+                    <div style="margin-left:auto; display:flex; gap:10px;">
+                        <button class="zoom-btn btn-danger" onclick="shuffleSeats()">🔀 換座位</button>
+                        <button class="zoom-btn" onclick="undoShuffle()">↩️ 復原</button>
+                    </div>
                 </div>
                 <div class="seat-grid-container" id="seatGridContainer">
                     <div class="seat-grid" id="seatGrid"></div>
@@ -1131,23 +1134,19 @@ let previousSeatSnapshot = null; // 換座位前的備份
                 return;
             }
 
-            // 生成所有可用座位的列表
-            const availableSeats = [];
-            for (let row = 0; row < seatLayout.rows; row++) {
-                for (let col = 0; col < seatLayout.cols; col++) {
-                    availableSeats.push({ row, col });
-                }
-            }
+            // 只取得「目前有學生的座位」，空位保持不動
+            const occupiedSeats = assignedStudents.map(s => ({
+                row: s.row,
+                col: s.col
+            }));
 
-            // 隨機打亂座位
-            const shuffledSeats = [...availableSeats].sort(() => Math.random() - 0.5);
-            
-            // 分配新座位
+            // 隨機打亂這些座位
+            const shuffledSeats = [...occupiedSeats].sort(() => Math.random() - 0.5);
+
+            // 重新分配（只在原本有人坐的位置之間交換）
             assignedStudents.forEach((student, index) => {
-                if (index < shuffledSeats.length) {
-                    student.row = shuffledSeats[index].row;
-                    student.col = shuffledSeats[index].col;
-                }
+                student.row = shuffledSeats[index].row;
+                student.col = shuffledSeats[index].col;
             });
 
             saveStudents();
