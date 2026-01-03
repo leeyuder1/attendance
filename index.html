@@ -789,6 +789,7 @@
                     <input type="number" id="cols" placeholder="列" min="1" max="20" value="6">
                 </div>
                 <button onclick="setupSeats()">🪑 設定座位</button>
+                <button onclick="shuffleSeats()" class="btn-danger" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">🔀 打亂座位</button>
             </div>
 
             <!-- 統計資訊 -->
@@ -810,6 +811,10 @@
             <!-- 座位配置 -->
             <div class="seat-config" id="seatConfig" style="display: none;">
                 <h3>🪑 座位配置</h3>
+                <div id="topStudentsDisplay" style="margin-bottom: 15px; padding: 15px; background: #fff3cd; border-radius: 8px; border: 2px solid #ffc107; display: none;">
+                    <strong style="color: #856404;">⚠️ 點數最多前12名：</strong>
+                    <span id="topStudentsList" style="color: #856404; margin-left: 10px;"></span>
+                </div>
                 <div class="zoom-controls">
                     <label>縮放：</label>
                     <input type="range" id="zoomSlider" class="zoom-slider" min="30" max="150" value="100" step="5">
@@ -1052,6 +1057,146 @@
             renderSeats();
         }
 
+        // 打亂座位
+        function shuffleSeats() {
+            if (!seatLayout.rows || !seatLayout.cols) {
+                alert('請先設定座位配置！');
+                return;
+            }
+
+            if (!confirm('確定要打亂所有學生的座位嗎？\n\n此操作會隨機重新分配所有已分配座位的學生。')) {
+                return;
+            }
+
+            // 取得所有已分配座位的學生
+            const assignedStudents = students.filter(s => 
+                s.row !== null && s.row !== undefined && 
+                s.col !== null && s.col !== undefined &&
+                s.row >= 0 && s.row < seatLayout.rows &&
+                s.col >= 0 && s.col < seatLayout.cols
+            );
+
+            if (assignedStudents.length === 0) {
+                alert('目前沒有已分配座位的學生！');
+                return;
+            }
+
+            // 生成所有可用座位的列表
+            const availableSeats = [];
+            for (let row = 0; row < seatLayout.rows; row++) {
+                for (let col = 0; col < seatLayout.cols; col++) {
+                    availableSeats.push({ row, col });
+                }
+            }
+
+            // 隨機打亂座位
+            const shuffledSeats = [...availableSeats].sort(() => Math.random() - 0.5);
+            
+            // 分配新座位
+            assignedStudents.forEach((student, index) => {
+                if (index < shuffledSeats.length) {
+                    student.row = shuffledSeats[index].row;
+                    student.col = shuffledSeats[index].col;
+                }
+            });
+
+            saveStudents();
+            renderSeats();
+        }
+
+        // 簡易 CSV 解析函數
+        function parseCSVLine(line) {
+            const result = [];
+            let current = '';
+            let inQuotes = false;
+            
+            for (let i = 0; i < line.length; i++) {
+                const char = line[i];
+                if (char === '"') {
+                    inQuotes = !inQuotes;
+                } else if (char === ',' && !inQuotes) {
+                    result.push(current.trim());
+                    current = '';
+                } else {
+                    current += char;
+                }
+            }
+            result.push(current.trim());
+            return result;
+        }
+
+        // 從 Google Sheets 讀取點數資料
+        async function loadStudentPoints() {
+            try {
+                const response = await fetch(GOOGLE_SHEETS_URL + '&t=' + Date.now()); // 添加時間戳避免快取
+                if (!response.ok) {
+                    throw new Error('無法讀取 Google Sheets 資料');
+                }
+                
+                const csvText = await response.text();
+                const lines = csvText.split('\n').filter(line => line.trim());
+                
+                studentPoints = {};
+                
+                // 解析 CSV（跳過第46行，那是日期）
+                lines.forEach((line, index) => {
+                    if (index === 45) return; // 跳過第46行（索引45，因為是日期行）
+                    
+                    const columns = parseCSVLine(line);
+                    if (columns.length > 0) {
+                        // 第一欄（A欄）是總點數
+                        const totalPoints = parseFloat(columns[0]) || 0;
+                        const studentNumber = index + 1; // 第1行是1號，第2行是2號...
+                        if (!isNaN(totalPoints)) {
+                            studentPoints[studentNumber] = totalPoints;
+                        }
+                    }
+                });
+                
+                console.log('學生點數資料載入成功', studentPoints);
+                
+                // 更新座位顯示和排行榜
+                if (dataLoaded) {
+                    renderSeats();
+                    updateTopStudents();
+                }
+            } catch (error) {
+                console.error('載入學生點數失敗:', error);
+                // 如果載入失敗，不影響其他功能
+            }
+        }
+
+        // 更新前12名點數最多的學生
+        function updateTopStudents() {
+            const topStudentsDisplay = document.getElementById('topStudentsDisplay');
+            const topStudentsList = document.getElementById('topStudentsList');
+            
+            if (!topStudentsDisplay || !topStudentsList || Object.keys(studentPoints).length === 0) {
+                if (topStudentsDisplay) topStudentsDisplay.style.display = 'none';
+                return;
+            }
+
+            // 將點數資料轉換為陣列並排序
+            const pointsArray = Object.entries(studentPoints)
+                .map(([number, points]) => ({
+                    number: parseInt(number),
+                    points: points
+                }))
+                .filter(item => item.points > 0) // 只顯示點數大於0的
+                .sort((a, b) => b.points - a.points) // 由高到低排序
+                .slice(0, 12); // 取前12名
+
+            if (pointsArray.length === 0) {
+                topStudentsDisplay.style.display = 'none';
+                return;
+            }
+
+            // 顯示前12名
+            const topListText = pointsArray.map(item => `${item.number}號(${item.points})`).join('、');
+            topStudentsList.textContent = topListText;
+            topStudentsDisplay.style.display = 'block';
+        }
+
         // 渲染座位
         function renderSeats() {
             const seatGrid = document.getElementById('seatGrid');
@@ -1097,8 +1242,9 @@
 
                             card.innerHTML = `
                                 <button class="delete-student-btn" onclick="event.stopPropagation(); deleteStudent('${student.name}')" title="刪除學生">×</button>
+                                <button class="delete-student-btn" onclick="event.stopPropagation(); deleteStudent('${student.name}')" title="刪除學生">×</button>
                                 <div class="seat-number">座號 ${student.number}</div>
-                                <div class="seat-name" style="cursor: pointer; text-decoration: underline;" onclick="event.stopPropagation(); showStudentRecord('${student.name}')" title="點擊查看出缺席記錄">${student.name}</div>
+                                <div class="seat-name" style="cursor: pointer; text-decoration: underline;" onclick="event.stopPropagation(); showStudentRecord('${student.name}')" title="點擊查看出缺席記錄">${student.name}${studentPoints[student.number] !== undefined ? `(${studentPoints[student.number]})` : ''}</div>
                                 ${date ? `
                                     ${isPresent ? '<div class="seat-status present">✓ 出席</div>' : ''}
                                     ${isAbsent ? `<div class="seat-status absent">✗ ${leaveInfo}</div>` : ''}
@@ -1797,6 +1943,7 @@
                 dataLoaded = true;
                 renderSeats();
                 updateStats();
+                updateTopStudents(); // 更新排行榜
                 return;
             }
 
@@ -1843,6 +1990,7 @@
                 dataLoaded = true;
                 renderSeats();
                 updateStats();
+                updateTopStudents(); // 更新排行榜
                 
                 // 監聽資料變更（即時同步）
                 db.collection('data').doc('students').onSnapshot((doc) => {
@@ -1891,11 +2039,18 @@
                 dataLoaded = true;
                 renderSeats();
                 updateStats();
+                updateTopStudents(); // 更新排行榜
             }
         }
 
         // 初始化時載入資料
         loadDataFromFirebase();
+        
+        // 載入學生點數資料
+        loadStudentPoints();
+        
+        // 每5分鐘自動重新載入點數資料
+        setInterval(loadStudentPoints, 5 * 60 * 1000);
 
         // 格式化日期
         function formatDate(dateString) {
