@@ -791,6 +791,12 @@ window.addEventListener("load", function () {
     setTaiwanTodayForAllDates();
 });
 
+
+function togglePointsDisplay() {
+    showPoints = document.getElementById('togglePoints').checked;
+    renderSeats();
+}
+
 </script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js">
         function undoShuffle() {
@@ -811,9 +817,23 @@ window.addEventListener("load", function () {
             renderSeats();
         }
 
+
+function togglePointsDisplay() {
+    showPoints = document.getElementById('togglePoints').checked;
+    renderSeats();
+}
+
 </script>
 </head>
 <body>
+
+<div style="margin:10px;">
+    <label>
+        <input type="checkbox" id="togglePoints" checked onchange="togglePointsDisplay()">
+        顯示格數
+    </label>
+</div>
+
     <div class="container">
         <div class="header">
             <h1>📋 學生點名系統</h1>
@@ -891,6 +911,11 @@ window.addEventListener("load", function () {
                     <span id="topStudentsList" style="color: #856404; margin-left: 10px;"></span>
                 </div>
                 <div class="zoom-controls">
+                    <!-- ⭐ 新增：格數開關 -->
+                    <label style="margin-right: 10px;">
+                        <input type="checkbox" id="togglePoints" checked onchange="togglePointsDisplay()">
+                        顯示格數
+                    </label>
                     <label>縮放：</label>
                     <input type="range" id="zoomSlider" class="zoom-slider" min="30" max="150" value="100" step="5">
                     <span class="zoom-value" id="zoomValue">100%</span>
@@ -1006,7 +1031,8 @@ window.addEventListener("load", function () {
 const GOOGLE_SHEETS_URL =
   'https://docs.google.com/spreadsheets/d/15YcjLSBNfVfXksPPXoCmIWFyYo3fk7aMGkp9GugoJQA/export?format=csv';
 
-let studentPoints = {}; // 座號 -> 累計格數
+let studentPoints = {};
+let showPoints = true; // 座號 -> 累計格數
 let previousSeatSnapshot = null; // 換座位前的備份
 
         // ========== Firebase 設定區 ==========
@@ -2499,6 +2525,12 @@ let previousSeatSnapshot = null; // 換座位前的備份
             renderSeats();
         }
 
+
+function togglePointsDisplay() {
+    showPoints = document.getElementById('togglePoints').checked;
+    renderSeats();
+}
+
 </script>
 
 <script>
@@ -2540,6 +2572,12 @@ window.addEventListener("load", () => {
     setAllDatesToToday();
     scheduleNextMidnightUpdate();
 });
+
+function togglePointsDisplay() {
+    showPoints = document.getElementById('togglePoints').checked;
+    renderSeats();
+}
+
 </script>
 
 </body>
